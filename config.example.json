@@ -1,0 +1,10 @@
+{
+  "layout": "2x2",
+  "shell": "bash",
+  "panes": [
+    "bash",
+    "bash",
+    "bash",
+    "bash"
+  ]
+}
