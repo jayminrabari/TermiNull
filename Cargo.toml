@@ -1,14 +1,30 @@
 [package]
-name = "gridterm"
-version = "0.1.0"
+name = "terminull"
+version = "0.1.1"
 edition = "2021"
+description = "Lightweight terminal grid (TUI + native GUI) for low-end hardware"
+
+[package.metadata.deb]
+maintainer = "TermiNull contributors"
+depends = "$auto"
+section = "utils"
+priority = "optional"
+extended-description = """TermiNull spawns one PTY per pane, with ratatui (run) or winit/softbuffer (gui). Preset layouts: 2, 2x2, 3x4, 4x4; optional JSON config for shells and commands."""
+assets = [
+    ["target/release/terminull", "usr/bin/", "755"],
+    ["packaging/terminull.desktop", "usr/share/applications/", "644"],
+    ["README.md", "usr/share/doc/terminull/README", "644"],
+]
 
 [dependencies]
 anyhow = "1"
 crossterm = "0.28"
+arboard = "3"
+fontdue = "0.9"
 nix = { version = "0.29", features = ["term", "process", "fs", "signal"] }
 ratatui = "0.29"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+softbuffer = "0.4"
 vte = "0.13"
-
+winit = "0.29"

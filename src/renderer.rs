@@ -24,13 +24,17 @@ pub fn render(app: &mut App) -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut active = 0usize;
+    let mut rename = None::<String>;
     let mut last_sizes = vec![(0u16, 0u16); app.panes.len()];
     let result = loop {
         terminal.draw(|f| {
             let mut chunks = Vec::new();
             leaf_rects(&app.preset.tree(), f.area(), &mut chunks);
             for (idx, pane) in app.panes.iter().enumerate() {
-                let area = chunks.get(idx.min(chunks.len().saturating_sub(1))).copied().unwrap_or(f.area());
+                let area = chunks
+                    .get(idx.min(chunks.len().saturating_sub(1)))
+                    .copied()
+                    .unwrap_or(f.area());
                 let cols = area.width.saturating_sub(2).max(1);
                 let rows = area.height.saturating_sub(2).max(1);
                 if last_sizes.get(idx).copied() != Some((cols, rows)) {
@@ -43,6 +47,14 @@ pub fn render(app: &mut App) -> Result<()> {
                     let guard = pane.buffer.lock().unwrap();
                     guard.visible_lines(rows as usize)
                 };
+                let title = if idx == active {
+                    rename
+                        .as_ref()
+                        .map(|value| format!(" Rename: {} ", value))
+                        .unwrap_or_else(|| format!(" {} ", pane.title))
+                } else {
+                    format!(" {} ", pane.title)
+                };
                 let block = Block::default()
                     .borders(Borders::ALL)
                     .border_style(if idx == active {
@@ -50,19 +62,47 @@ pub fn render(app: &mut App) -> Result<()> {
                     } else {
                         Style::default().fg(Color::DarkGray)
                     })
-                    .title(format!(" {} ", idx + 1));
+                    .title(title);
                 f.render_widget(Paragraph::new(to_lines(visible)).block(block), area);
             }
         })?;
         if event::poll(Duration::from_millis(30))? {
             if let Event::Key(key) = event::read()? {
+                if let Some(value) = rename.as_mut() {
+                    match key.code {
+                        KeyCode::Enter => {
+                            if !value.trim().is_empty() {
+                                app.panes[active].title = value.trim().to_string();
+                            }
+                            rename = None;
+                        }
+                        KeyCode::Esc => rename = None,
+                        KeyCode::Backspace => {
+                            value.pop();
+                        }
+                        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            value.push(c);
+                        }
+                        _ => {}
+                    }
+                    continue;
+                }
                 match key.code {
-                    KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => break Ok(()),
+                    KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        break Ok(())
+                    }
+                    KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        rename = Some(app.panes[active].title.clone());
+                    }
                     KeyCode::Tab => {
                         active = (active + 1) % app.panes.len().max(1);
                     }
                     KeyCode::BackTab => {
-                        active = if active == 0 { app.panes.len().saturating_sub(1) } else { active - 1 };
+                        active = if active == 0 {
+                            app.panes.len().saturating_sub(1)
+                        } else {
+                            active - 1
+                        };
                     }
                     KeyCode::Char(c) => {
                         if let Some(byte) = control_byte(c, key.modifiers) {

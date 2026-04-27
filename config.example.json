@@ -1,10 +1,25 @@
 {
   "layout": "2x2",
   "shell": "bash",
+  "ui": {
+    "font": "Ubuntu Sans Mono",
+    "font_size": 13,
+    "scrollback_lines": 4000,
+    "theme": {
+      "background": "#101010",
+      "pane_background": "#111111",
+      "title_background": "#202020",
+      "title_active_background": "#263b2b",
+      "border": "#5a5a5a",
+      "border_active": "#4ec36b",
+      "text": "#e8e8e8",
+      "dim_text": "#a8a8a8"
+    }
+  },
   "panes": [
-    "bash",
-    "bash",
-    "bash",
-    "bash"
+    { "title": "API", "command": "bash" },
+    { "title": "Logs", "command": "bash" },
+    { "title": "Shell", "command": "bash" },
+    { "title": "DB", "command": "bash" }
   ]
 }

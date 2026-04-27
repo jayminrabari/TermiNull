@@ -1,6 +1,6 @@
 use anyhow::Result;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Axis {
@@ -53,14 +53,80 @@ impl<'de> Deserialize<'de> for LayoutPreset {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     pub layout: LayoutPreset,
+    #[serde(default = "default_shell")]
     pub shell: String,
     #[serde(default)]
-    pub panes: Vec<String>,
+    pub panes: Vec<PaneSpec>,
+    #[serde(default)]
+    pub ui: UiConfig,
 }
 
 impl Config {
     pub fn from_json(raw: &str) -> Result<Self> {
         Ok(serde_json::from_str(raw)?)
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct UiConfig {
+    pub font: Option<String>,
+    pub font_size: Option<f32>,
+    pub scrollback_lines: Option<usize>,
+    #[serde(default)]
+    pub theme: ThemeConfig,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ThemeConfig {
+    pub background: Option<String>,
+    pub pane_background: Option<String>,
+    pub title_background: Option<String>,
+    pub title_active_background: Option<String>,
+    pub border: Option<String>,
+    pub border_active: Option<String>,
+    pub text: Option<String>,
+    pub dim_text: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PaneSpec {
+    Command(String),
+    Detailed {
+        title: Option<String>,
+        command: Option<String>,
+    },
+}
+
+impl PaneSpec {
+    pub fn command(&self) -> Option<&str> {
+        match self {
+            Self::Command(command) => non_empty(command),
+            Self::Detailed { command, .. } => command.as_deref().and_then(non_empty),
+        }
+    }
+
+    pub fn title(&self) -> Option<&str> {
+        match self {
+            Self::Command(command) => non_empty(command),
+            Self::Detailed { title, command } => title
+                .as_deref()
+                .and_then(non_empty)
+                .or_else(|| command.as_deref().and_then(non_empty)),
+        }
+    }
+}
+
+fn default_shell() -> String {
+    "bash".to_string()
+}
+
+fn non_empty(value: &str) -> Option<&str> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
     }
 }
 
@@ -101,7 +167,11 @@ impl LayoutPreset {
 pub fn leaf_rects(node: &LayoutNode, area: Rect, out: &mut Vec<Rect>) {
     match node {
         LayoutNode::Pane => out.push(area),
-        LayoutNode::Split { axis, weights, children } => {
+        LayoutNode::Split {
+            axis,
+            weights,
+            children,
+        } => {
             let direction = match axis {
                 Axis::Row => Direction::Horizontal,
                 Axis::Column => Direction::Vertical,
@@ -111,7 +181,10 @@ pub fn leaf_rects(node: &LayoutNode, area: Rect, out: &mut Vec<Rect>) {
                 .iter()
                 .map(|w| Constraint::Ratio(*w as u32, total))
                 .collect::<Vec<_>>();
-            let chunks = Layout::default().direction(direction).constraints(constraints).split(area);
+            let chunks = Layout::default()
+                .direction(direction)
+                .constraints(constraints)
+                .split(area);
             for (child, rect) in children.iter().zip(chunks.iter()) {
                 leaf_rects(child, *rect, out);
             }
@@ -141,6 +214,40 @@ mod tests {
     use super::*;
     #[test]
     fn rejects_unknown_cli_to_default() {
-        assert!(matches!(LayoutPreset::from_cli("nope"), LayoutPreset::TwoByTwo));
+        assert!(matches!(
+            LayoutPreset::from_cli("nope"),
+            LayoutPreset::TwoByTwo
+        ));
+    }
+
+    #[test]
+    fn parses_old_string_pane_config() {
+        let config =
+            Config::from_json(r#"{"layout":"2x2","shell":"bash","panes":["htop"]}"#).unwrap();
+        assert_eq!(config.panes[0].command(), Some("htop"));
+        assert_eq!(config.panes[0].title(), Some("htop"));
+    }
+
+    #[test]
+    fn parses_titled_pane_config() {
+        let config = Config::from_json(
+            r#"{"layout":"2x2","panes":[{"title":"Logs","command":"tail -f app.log"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(config.shell, "bash");
+        assert_eq!(config.panes[0].command(), Some("tail -f app.log"));
+        assert_eq!(config.panes[0].title(), Some("Logs"));
+    }
+
+    #[test]
+    fn parses_ui_config() {
+        let config = Config::from_json(
+            r##"{"layout":"2x2","ui":{"font":"Ubuntu Sans Mono","font_size":13,"scrollback_lines":800,"theme":{"text":"#ffffff"}}}"##,
+        )
+        .unwrap();
+        assert_eq!(config.ui.font.as_deref(), Some("Ubuntu Sans Mono"));
+        assert_eq!(config.ui.font_size, Some(13.0));
+        assert_eq!(config.ui.scrollback_lines, Some(800));
+        assert_eq!(config.ui.theme.text.as_deref(), Some("#ffffff"));
     }
 }

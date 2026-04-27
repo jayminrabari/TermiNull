@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=TermiNull
+GenericName=Terminal grid
+Comment=Multi-pane terminal grid (native GUI)
+Exec=terminull gui 2x2
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;Utility;
+Keywords=terminal;pty;multiplexer;grid;
+StartupNotify=true
